@@ -2,6 +2,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib import patches
+from matplotlib.ticker import MaxNLocator
 
 ''' Tools to aid in the creation of consistent figures in the tufte thesis. '''
 
@@ -93,6 +94,11 @@ def setLabels(axs, ylabels=None, xlabels=None):
       ax.set_ylabel(ylabels)
     if xlabels is not None and ax.is_last_row():
       ax.set_xlabel(xlabels)
+
+def forceIntegerTicks(ax, x=False, y=False):
+  ''' Force the tick marks on either of the axes to be in integers. '''
+  if x: ax.xaxis.set_major_locator(MaxNLocator(integer=True))
+  if y: ax.yaxis.set_major_locator(MaxNLocator(integer=True))
 
 def formatSI(number, precision=3, s=''):
   ''' Add SI metric prefix to the number and print to a given specification.
