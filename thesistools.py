@@ -10,13 +10,18 @@ marginWidth = 2
 textWidth   = 4.2
 fullWidth   = 6.2
 
-def createAxes(nAxes, colWrap=4, axesHeight=4, aspect=1.0, **subplotsKwargs):
-  ''' Create a figure and sub-axes, while specifing the size of the sub figures.
+def createAxes(nAxes, colWrap=4, axesHeight=4, totalWidth=None, aspect=1.0,
+               **subplotsKwargs):
+  '''Create a figure and sub-axes, while specifing the size of the sub figures.
 
   This emulated the behaviour of the seaborn facet grid, where we give a size
   for the individual figures rather than the overall plot.
 
   The remaining axes are blanked using plt.axis('off')
+
+  Only one of ``axesHeight`` or ``totalWidth`` should be not None as these
+  options conflict. To maintain backwards compatibility, ``axesHeight`` will
+  override ``totalWidth``.
 
   Parameters
   ----------
@@ -24,8 +29,10 @@ def createAxes(nAxes, colWrap=4, axesHeight=4, aspect=1.0, **subplotsKwargs):
     Number of sub-axes to create
   colWrap: int
     How many columns in the figure, next axes will go into new rows.
-  axesHeight: float
+  axesHeight: float or None
     Height of the axes, in inches by default
+  totalWidth: float or None
+    Total width of the figure, conflicts with axes height
   aspect: float
     Width/Height ratio of the sub-axes
 
@@ -33,6 +40,7 @@ def createAxes(nAxes, colWrap=4, axesHeight=4, aspect=1.0, **subplotsKwargs):
   -------
   fig, [axes]
     The axes are returned in a flat array, [0,...,nAxes-1]
+
   '''
 
   nCols = min(nAxes, colWrap)
@@ -42,13 +50,22 @@ def createAxes(nAxes, colWrap=4, axesHeight=4, aspect=1.0, **subplotsKwargs):
   # print(f'nAxes = {nAxes}, nBlank = {nAxesBlank}, nRows = {nRows}, nCols = {nCols}')
   # raise SystemExit
 
-  axesWidth = axesHeight*aspect
-  figWidth = nCols*axesWidth
-  figHeight = nRows*axesHeight
+  if totalWidth is None:
+    axesWidth = axesHeight*aspect
+    figWidth = nCols*axesWidth
+    figHeight = nRows*axesHeight
 
-  fig, axs = plt.subplots(ncols=nCols, nrows=nRows,
-                          figsize=(figWidth, figHeight),
-                          **subplotsKwargs)
+    fig, axs = plt.subplots(ncols=nCols, nrows=nRows,
+                            figsize=(figWidth, figHeight),
+                            **subplotsKwargs)
+  else:
+    axesWidth = totalWidth/nCols
+    axesHeight = axesWidth/aspect
+    figHeight = axesHeight*nRows
+
+    fig, axs = plt.subplots(ncols=nCols, nrows=nRows,
+                            figsize=(totalWidth, figHeight),
+                            **subplotsKwargs)
 
   # Keep the axes returned in a 1d array
   if nRows > 1:
