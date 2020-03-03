@@ -1,6 +1,12 @@
 #!/usr/bin/env python
-import numpy as np
+import hashlib
+import os
+import sys
+from functools import reduce
+from pathlib import Path
+
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import patches
 from matplotlib.ticker import MaxNLocator
 
@@ -10,7 +16,7 @@ marginWidth = 2
 textWidth   = 4.2
 fullWidth   = 6.2
 
-def createAxes(nAxes, colWrap=4, axesHeight=4, totalWidth=None, aspect=1.0,
+def createAxes(nAxes, colWrap=4, axesHeight=4, figWidth=None, aspect=1.0,
                **subplotsKwargs):
   '''Create a figure and sub-axes, while specifing the size of the sub figures.
 
@@ -19,9 +25,9 @@ def createAxes(nAxes, colWrap=4, axesHeight=4, totalWidth=None, aspect=1.0,
 
   The remaining axes are blanked using plt.axis('off')
 
-  Only one of ``axesHeight`` or ``totalWidth`` should be not None as these
+  Only one of ``axesHeight`` or ``figWidth`` should be not None as these
   options conflict. To maintain backwards compatibility, ``axesHeight`` will
-  override ``totalWidth``.
+  override ``figWidth``.
 
   Parameters
   ----------
@@ -31,7 +37,7 @@ def createAxes(nAxes, colWrap=4, axesHeight=4, totalWidth=None, aspect=1.0,
     How many columns in the figure, next axes will go into new rows.
   axesHeight: float or None
     Height of the axes, in inches by default
-  totalWidth: float or None
+  figWidth: float or None
     Total width of the figure, conflicts with axes height
   aspect: float
     Width/Height ratio of the sub-axes
@@ -50,7 +56,7 @@ def createAxes(nAxes, colWrap=4, axesHeight=4, totalWidth=None, aspect=1.0,
   # print(f'nAxes = {nAxes}, nBlank = {nAxesBlank}, nRows = {nRows}, nCols = {nCols}')
   # raise SystemExit
 
-  if totalWidth is None:
+  if figWidth is None:
     axesWidth = axesHeight*aspect
     figWidth = nCols*axesWidth
     figHeight = nRows*axesHeight
@@ -59,12 +65,12 @@ def createAxes(nAxes, colWrap=4, axesHeight=4, totalWidth=None, aspect=1.0,
                             figsize=(figWidth, figHeight),
                             **subplotsKwargs)
   else:
-    axesWidth = totalWidth/nCols
+    axesWidth = figWidth/nCols
     axesHeight = axesWidth/aspect
     figHeight = axesHeight*nRows
 
     fig, axs = plt.subplots(ncols=nCols, nrows=nRows,
-                            figsize=(totalWidth, figHeight),
+                            figsize=(figWidth, figHeight),
                             **subplotsKwargs)
 
   # Keep the axes returned in a 1d array
@@ -135,6 +141,8 @@ def formatSI(number, precision=3, s=''):
   # Shift by multiples of 1000 so the number in the range (1, 1000]
   shortenedDigits = number/(1e3**baseThousand)
 
+
+
   prefixDict = {
     # '-8':'y', '-7':'z', '-6':'a', '-5':'f',
     '-4':'p', '-3':'n', '-2':'μ', '-1':'m', '+0':'' ,
@@ -146,6 +154,60 @@ def formatSI(number, precision=3, s=''):
     return f'{shortenedDigits:{s}.{precision}g} {prefixDict[prefixKey]}'
   else:
     return f'{number:{s}.{precision}g} '
+
+def save(*args, **kwargs):
+  ''' Save the figure with metadata and crop the boundaries . '''
+  saveFigureAndTrim(*args, **kwargs)
+
+def saveFigureAndTrim(saveName:Path, args=None, additionalMetadata=None,
+                      padding=0.15, tlPadding=1.08, fig=None, despine=True):
+  ''' Save the figure with metadata and crop the boundaries . '''
+
+  # Use the most recent figure if None is provided
+  if fig is None: fig = plt.gcf()
+
+  # Remove the right and top axis
+  axs = fig.get_axes()
+  if despine: [despine_axis(ax) for ax in axs]
+
+  metadata = {
+    "Exp:Creating Script": f'{Path(sys.argv[0]).resolve()}',
+    "Exp:Working Dir": f'{os.getcwd()}',
+  }
+
+  # Provide the command line arguments
+  if args is not None:
+    for key, value in vars(args).items():
+      metadata[f'Exp:arg-{key}'] = f'{str(value)}'
+
+  # Add user provided keywords
+  if additionalMetadata is not None: metadata.update(additionalMetadata)
+
+  plotKwargs = {}
+  if padding: plotKwargs = dict(bbox_inches='tight', pad_inches=padding)
+
+  fig.tight_layout(pad=tlPadding)
+  fig.savefig(saveName, dpi=330, **plotKwargs, metadata=metadata)
+  plt.close(fig=fig)
+
+def _calculateHash(args, length=9):
+  ''' Create a unique hash for a set of input arguments. '''
+  # Join all the file names as a string with a '+' between elements
+  argsString = ""
+
+  for key, value in vars(args).items(): argsString += str(value)
+
+  hash_ = int(hashlib.sha1(argsString.encode('utf-8')).hexdigest(), 16)
+  return hash_ % 10**length
+
+def despine_axis(ax):
+  ''' Remove the top and right axis.
+
+  This emulates seaborn.despine, but doesn't require the modules.
+  '''
+  ax.spines['right'].set_visible(False)
+  ax.spines['top'].set_visible(False)
+
 
 class Curve:
     def __init__(self, ax, func):
